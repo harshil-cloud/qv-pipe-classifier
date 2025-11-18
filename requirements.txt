@@ -1,1 +1,12 @@
-
+timm
+pandas
+numpy
+matplotlib
+opencv-python
+pillow
+tqdm
+pyyaml
+rich
+iterative-stratification
+decord
+av
