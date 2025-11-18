@@ -5,7 +5,7 @@ Fichiers de pilotages :
 
   - README.md (racine) : écris le but, le plan Étapes 1→5, liens clés, et un “Quickstart” (à compléter plus tard).
 
-  - ENVIRONMENT.md : liste ce que tu installeras (Python 3.10+, PyTorch+CUDA, timm, decord/pyav, iterative-stratification…).
+  - ENVIRONMENT.md : liste ce que tu installeras (Python 3.10+, PyTorch+CUDA, timm, decord/pyav, iterative-stratification…). --> language humain ; language machine = environment.yml
 
   - CONFIG.md : explique tes futurs .yaml (chemins data/…, hyperparams, N=5/N=9, etc.).
 
