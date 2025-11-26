@@ -27,16 +27,16 @@ Pour ce faire, nous allons utiliser des techniques de deep learning adaptées au
 
 ##  **Étapes du projet**
 
-### **Étape 1 : Préparation des données**  
+### **Étape 1 : Préparation des données offline**  
 - **Objectif :** Transformer les vidéos en images utiles et organiser les données pour l'entraînement.
 - **Méthodes utilisées :**  
-  - **Sampling uniforme :** Extraire 5 frames régulièrement espacées par vidéo.  
+  - **Sampling uniforme :** Extraire 5 (étape 2) ou 9 (étape3) frames régulièrement espacées par vidéo.  
   - **Nettoyage des données :**  
     - Supprimer les images floues (en utilisant la variance du Laplacien).
     - Supprimer les doublons (pHash).  
   - **Création de splits stratifiés :**  
     - Split 5-fold multi-label en utilisant **iterative stratification** pour maintenir un équilibre des classes.
-    - Normalisation des images avec les statistiques d'ImageNet (mean/std).
+
 
 **Détails :**
 - Nombre de vidéos : 9 601 (55 heures de vidéo).
@@ -51,39 +51,69 @@ Pour ce faire, nous allons utiliser des techniques de deep learning adaptées au
 ---
 
 ### **Étape 2 : Baseline frame-wise**  
-- **Objectif :** Construire une baseline simple où 5 frames par vidéo sont passées dans un CNN (ResNet-18, TResNet).
-- **Méthode :**  
-  - **CNN simple :** Utilisation de **ResNet-18** (pré-entraîné sur ImageNet).  
-  - **Fusion vidéo :** Moyenne des logits des 5 frames pour obtenir une prédiction vidéo.
-  - **Perte utilisée :**  
-    - **BCE (Binary Cross-Entropy)** comme perte de base.
-    - **ASL (Asymmetric Loss)** pour mieux gérer les classes déséquilibrées (présence de défauts rares).
-  - **Optimisation :**  
-    - Optimiseur **AdamW** avec un planning de taux d'apprentissage **OneCycleLR**.
-    - **AMP (half-precision)** pour accélérer l'entraînement.
+- **Objectif :** Établir une première baseline de classification en utilisant 5 frames par vidéo, traitées indépendamment puis fusionnées au niveau des prédictions.
 
-**Projets GitHub :**
-- **[timm](https://github.com/huggingface/pytorch-image-models)** – zoo PyTorch (ResNet/TResNet, optim/schedulers, EMA) ; parfait pour baselines rapides.  
-- **[TResNet (MIIL)](https://github.com/Alibaba-MIIL/TResNet)** – architecture multi-label performante et légère (réf. gagnants).  
+- **Prétraitement en ligne (DataLoader) :**  
+  - **Resize** des frames à la résolution attendue par le backbone.  
+  - **Conversion en tenseur PyTorch** (`ToTensor`).  
+  - **Normalisation ImageNet** avec les statistiques standards :  
+    - mean = [0.485, 0.456, 0.406]  
+    - std = [0.229, 0.224, 0.225]  
+  *(Ces opérations sont appliquées à la volée, et non en prétraitement offline.)*
 
----
+- **Modèle utilisé :**  
+  - **CNN simple** basé sur **ResNet-18** (pré-entraîné ImageNet) ou **TResNet** pour une baseline multi-label plus robuste.
+
+- **Fusion vidéo :**  
+  - Passage des **5 frames individuellement** dans le backbone.  
+  - Agrégation par **moyenne des logits** pour obtenir une prédiction unique par vidéo.
+
+- **Fonctions de perte :**  
+  - **BCE (Binary Cross-Entropy)** comme base simple.  
+  - **ASL (Asymmetric Loss)** recommandée pour gérer l’extrême déséquilibre des classes (défauts rares).
+
+- **Stratégie d’optimisation :**  
+  - **AdamW** comme optimiseur principal.  
+  - Scheduler **OneCycleLR** pour une montée rapide puis décroissance contrôlée du taux d’apprentissage.  
+  - Utilisation de **l’AMP (Automatic Mixed Precision)** pour réduire l’utilisation mémoire et accélérer l'entraînement.
+
+**Projets GitHub utiles :**
+- **timm** – vaste bibliothèque de backbones (ResNet/TResNet) et outils d’entraînement (optimiseurs, schedulers, EMA).  
+- **TResNet (MIIL)** – modèle multi-label performant, utilisé comme baseline dans plusieurs solutions gagnantes.  
+
 
 ### **Étape 3 : Super-images 3×3**  
-- **Objectif :** Créer des super-images à partir de 9 frames et entraîner un modèle plus complexe pour améliorer la mAP.
-- **Méthode :**  
-  - **Super-image 3×3 :** À partir des 9 frames extraites d’une vidéo, créer une grille de 3×3 (super-image).
-  - **Modèles utilisés :**  
-    - **ConvNeXt**, **NFNet**, **EfficientNet**, **TResNet-XL** + **MLDecoder** pour la tête multi-label.
-  - **Pertes adaptées :**  
-    - **ASL** ou **Class-Balanced Focal Loss** (CB-Focal) pour mieux gérer les classes rares.
-  - **Augmentations :**  
-    - **Horizontal Flip** et **Tile Shuffle** (permutation légère des tuiles de la super-image).
+- **Objectif :** Exploiter davantage d’information temporelle en assemblant 9 frames d’une même vidéo en une grille 3×3 (super-image), puis entraîner des modèles plus puissants pour améliorer la mAP globale.
 
-**Projets GitHub :**
-- **[IBM/sifar-pytorch](https://github.com/IBM/sifar-pytorch)** – implémentation “super-image” (mise en grille 3×3/4×4 \+ entraînement image-classifier).  
-- **[timm](https://github.com/huggingface/pytorch-image-models)** – backbones **ConvNeXt/NFNet/EfficientNet**, schedulers (**OneCycle**), **EMA** prêts à l’emploi.  
-- **[ML-Decoder (head multi-label)](https://github.com/Alibaba-MIIL/ML_Decoder)** – à greffer sur un backbone timm si tu veux copier la tête gagnante TResNet-XL+MLDecoder.  
-- **[ASL (Asymmetric Loss)](https://github.com/Alibaba-MIIL/ASL)** – implémentation officielle MIIL pour le multi-label long-tailed.  
+- **Construction des super-images :**  
+  - Sélection de **9 frames** régulièrement espacées par vidéo.  
+  - Assemblage des 9 images en une **grille 3×3** (super-image), conformément à l’approche SIFAR.  
+  - Sauvegarde des super-images sous forme d’images RGB standard (JPEG/PNG).
+
+- **Prétraitement en ligne (DataLoader) :**  
+  - **Resize** à la résolution requise par le backbone (selon ConvNeXt/NFNet/TResNet-XL).  
+  - **Conversion en tenseur PyTorch**.  
+  - **Normalisation ImageNet** (mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225]).  
+  - Ces opérations sont appliquées à la volée, et non intégrées dans les super-images stockées sur disque.
+
+- **Modèles utilisés :**  
+  - Backbones haute performance issus de `timm`, tels que **ConvNeXt**, **NFNet**, **EfficientNet**, ou **TResNet-XL**.  
+  - Ajout possible d’une tête multi-label avancée, par exemple **ML-Decoder**, qui améliore la séparation des classes longues queues.
+
+- **Fonctions de perte :**  
+  - **ASL (Asymmetric Loss)** pour gérer le déséquilibre sévère du dataset.  
+  - **Class-Balanced Focal Loss (CB-Focal)** comme alternative pour les classes très rares.
+
+- **Augmentations spécifiques :**  
+  - **Horizontal Flip** léger (probabilité modérée).  
+  - **Tile Shuffle** : permutation légère et contrôlée des tuiles constitutives de la super-image, une technique utilisée dans plusieurs solutions performantes pour améliorer la robustesse sans altérer la texture des défauts.
+
+**Projets GitHub utiles :**
+- **IBM/sifar-pytorch** – implémentation complète du concept “super-image” (assemblage 3×3 ou 4×4 + entraînement d’un classifieur).  
+- **timm** – backbones modernes (**ConvNeXt**, **NFNet**, **EfficientNet**), schedulers (**OneCycle**), normalisation, AMP et EMA intégrés.  
+- **ML-Decoder** – tête multi-label performante, compatible avec un backbone timm (approche utilisée par TResNet-XL).  
+- **ASL (Asymmetric Loss)** – implémentation officielle MIIL adaptée au multi-label déséquilibré.  
+ 
 
 ---
 

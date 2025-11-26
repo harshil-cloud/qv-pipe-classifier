@@ -1,5 +1,5 @@
 """
-############# ETAPE1-2 ############
+############# ETAPE1-2  ############
 
 Nettoyage des frames extraites pour l'étape 1 :
 - Détection et suppression des images floues (variance du Laplacien)
@@ -50,7 +50,7 @@ La variance du Laplacien mesure les détails d’une image :
 
 On choisit donc un seuil empirique (entre 50 et 200 généralement).
 
-Avec BLUR_THRESHOLD = 100.0 on obtient xxx photos jugées comme floues sur un total de 48005.
+Avec BLUR_THRESHOLD = 100.0 on obtient 17098 photos jugées comme floues sur un total de 48005.
 """
 
 

@@ -1,4 +1,6 @@
 """
+############# ETAPE1-1 ############
+
 Script d'extraction de 5 frames uniformément espacées par vidéo.
 
 Entrée :
